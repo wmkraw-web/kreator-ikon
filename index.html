@@ -91,7 +91,10 @@
             
             const [aiPrompt, setAiPrompt] = useState('Słodki czerwony lisek z puszystym ogonem, wektorowa płaska ikona');
             const [aiImage, setAiImage] = useState(null);
+            
+            // Nowe stany ładowania
             const [isGenerating, setIsGenerating] = useState(false);
+            const [loadingText, setLoadingText] = useState('');
             const [errorMsg, setErrorMsg] = useState('');
 
             const CANVAS_SIZE = 512;
@@ -111,31 +114,54 @@
 
             const handleGenerateAI = async () => {
                 if (!aiPrompt.trim()) return;
+                
                 setIsGenerating(true);
                 setErrorMsg('');
+                setLoadingText('Łączenie z serwerem AI...');
+                
+                // Dynamiczny tekst ładowania poprawiający wrażenia
+                const messages = [
+                    'Analizowanie opisu...',
+                    'Szkicowanie kształtów...',
+                    'Nakładanie kolorów...',
+                    'Darmowe serwery są bardzo obciążone, prosimy o cierpliwość...',
+                    'To potrwa jeszcze kilka sekund...'
+                ];
+                
+                let step = 0;
+                const intervalId = setInterval(() => {
+                    if(step < messages.length) {
+                        setLoadingText(messages[step]);
+                        step++;
+                    }
+                }, 4000); // zmiana tekstu co 4 sekundy
                 
                 try {
                     const seed = Math.floor(Math.random() * 1000000);
                     const prompt = `${aiPrompt}, modern app icon design, single object centered, flat vector style, isolated on pure white background, professional graphic, minimalist`;
                     const encodedPrompt = encodeURIComponent(prompt);
                     
-                    // NOWOŚĆ: dodano model=flux dla błyskawicznego generowania!
-                    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${seed}&model=flux`;
+                    // Usunięto powolny model flux, przywrócono szybki standardowy
+                    const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${seed}`;
                     
                     const img = new Image();
                     img.crossOrigin = "Anonymous";
                     img.onload = () => {
+                        clearInterval(intervalId);
                         setAiImage(img);
                         setIsGenerating(false);
                     };
                     img.onerror = () => {
-                        throw new Error("Wystąpił problem z wygenerowaniem obrazka. Spróbuj ponownie.");
+                        clearInterval(intervalId);
+                        setErrorMsg("Serwer sztucznej inteligencji jest obecnie przeciążony. Spróbuj ponownie za chwilę.");
+                        setIsGenerating(false);
                     };
                     img.src = imageUrl;
 
                 } catch (error) {
+                    clearInterval(intervalId);
                     console.error(error);
-                    setErrorMsg(error.message);
+                    setErrorMsg("Wystąpił błąd sieci. Sprawdź połączenie.");
                     setIsGenerating(false);
                 }
             };
@@ -323,7 +349,7 @@
                                                     disabled={isGenerating}
                                                     className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-200 hover:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100"
                                                 >
-                                                    {isGenerating ? 'Generowanie magii (Tryb Turbo)...' : <div className="flex items-center gap-2"><IconSparkles /> Stwórz Ikonę AI</div>}
+                                                    {isGenerating ? loadingText : <div className="flex items-center gap-2"><IconSparkles /> Stwórz Ikonę AI</div>}
                                                 </button>
                                                 {errorMsg && <p className="text-red-500 text-xs font-bold text-center mt-2">{errorMsg}</p>}
                                                 <p className="text-[10px] text-slate-400 text-center">Wskazówka: AI automatycznie generuje ikony bez tła (wypełnia kształt na całej powierzchni płótna).</p>
