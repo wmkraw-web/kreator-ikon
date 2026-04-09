@@ -1,401 +1,345 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Sparkles, Download, Type, Coffee, Key, Lock, Palette } from 'lucide-react';
-
-// --- KONFIGURACJA PREMIUM ---
-const PREMIUM_SECRET_CODE = "KAWA2024";
-const BUY_COFFEE_LINK = "https://buycoffee.to/magiccolor"; 
-
-// --- FUNKCJA EKSPORTU DO ICO ---
-const convertToICO = async (canvas) => {
-  return new Promise((resolve) => {
-    // Skalujemy do 256x256, co jest standardem dla ICO
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = 256;
-    offCanvas.height = 256;
-    const offCtx = offCanvas.getContext('2d');
-    offCtx.drawImage(canvas, 0, 0, 256, 256);
-
-    offCanvas.toBlob((blob) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const pngData = new Uint8Array(e.target.result);
-        const pngSize = pngData.length;
-        
-        // Buffer na nagłówek ICO (6 bajtów) + wpis katalogu (16 bajtów) + dane PNG
-        const buffer = new ArrayBuffer(6 + 16 + pngSize);
-        const view = new DataView(buffer);
-        
-        // Nagłówek ICO
-        view.setUint16(0, 0, true);     // Zarezerwowane, zawsze 0
-        view.setUint16(2, 1, true);     // Typ: 1 dla ICO
-        view.setUint16(4, 1, true);     // Liczba obrazków: 1
-        
-        // Wpis katalogu obrazka
-        view.setUint8(6, 0);            // Szerokość: 0 = 256px
-        view.setUint8(7, 0);            // Wysokość: 0 = 256px
-        view.setUint8(8, 0);            // Liczba kolorów w palecie
-        view.setUint8(9, 0);            // Zarezerwowane
-        view.setUint16(10, 1, true);    // Płaszczyzny kolorów
-        view.setUint16(12, 32, true);   // Bity na piksel (32)
-        view.setUint32(14, pngSize, true); // Rozmiar danych obrazka
-        view.setUint32(18, 22, true);   // Offset do danych
-        
-        // Kopiowanie danych PNG do bufora
-        const u8View = new Uint8Array(buffer);
-        u8View.set(pngData, 22);
-        
-        resolve(new Blob([buffer], { type: 'image/x-icon' }));
-      };
-      reader.readAsArrayBuffer(blob);
-    }, 'image/png');
-  });
-};
-
-export default function App() {
-  const canvasRef = useRef(null);
-  
-  // Stan globalny
-  const [activeTab, setActiveTab] = useState('text');
-  const [isPremium, setIsPremium] = useState(false);
-  const [accessCode, setAccessCode] = useState('');
-
-  // Ustawienia ikony (wspólne)
-  const [backgroundColor, setBackgroundColor] = useState('#4f46e5');
-  const [borderRadius, setBorderRadius] = useState(128);
-  const [iconSize, setIconSize] = useState(256);
-  
-  // Ustawienia tekstu/emoji
-  const [iconText, setIconText] = useState('🔥');
-  const [textColor, setTextColor] = useState('#ffffff');
-  const [fontFamily, setFontFamily] = useState('Arial');
-  
-  // Ustawienia AI
-  const [aiPrompt, setAiPrompt] = useState('Słodki czerwony lisek z puszystym ogonem, wektorowa płaska ikona');
-  const [aiImage, setAiImage] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const CANVAS_SIZE = 512;
-
-  useEffect(() => {
-    redrawCanvas();
-  }, [iconText, textColor, backgroundColor, borderRadius, iconSize, fontFamily, aiImage, activeTab]);
-
-  const handleVerifyCode = () => {
-    if (accessCode.toUpperCase() === PREMIUM_SECRET_CODE) {
-      setIsPremium(true);
-      setAccessCode('');
-    } else {
-      alert('Nieprawidłowy kod. Postaw kawę autorowi, aby otrzymać dostęp!');
-    }
-  };
-
-  const handleGenerateAI = async () => {
-    if (!aiPrompt.trim()) return;
-    setIsGenerating(true);
-    setErrorMsg('');
-    
-    try {
-      const prompt = `${aiPrompt}, modern app icon design, single object centered, flat vector style, isolated on pure white background, professional graphic, minimalist`;
-      
-      // Korzystamy z nowego, szybkiego Kelnera Vercel API
-      const response = await fetch('/api/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt })
-      });
-
-      if (!response.ok) {
-          throw new Error("Błąd podczas łączenia z szybkim API. Sprawdź plik api/generate.js");
-      }
-
-      const data = await response.json();
-      
-      const img = new Image();
-      img.crossOrigin = "Anonymous";
-      img.onload = () => {
-        setAiImage(img);
-        setIsGenerating(false);
-      };
-      img.onerror = () => {
-        throw new Error("Wystąpił problem z wygenerowaniem obrazka na płatnym serwerze.");
-      };
-      img.src = data.imageUrl;
-
-    } catch (error) {
-      console.error(error);
-      setErrorMsg(error.message);
-      setIsGenerating(false);
-    }
-  };
-
-  const redrawCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    
-    ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-    ctx.save();
-    ctx.beginPath();
-    const r = borderRadius;
-    ctx.moveTo(r, 0);
-    ctx.lineTo(CANVAS_SIZE - r, 0);
-    ctx.quadraticCurveTo(CANVAS_SIZE, 0, CANVAS_SIZE, r);
-    ctx.lineTo(CANVAS_SIZE, CANVAS_SIZE - r);
-    ctx.quadraticCurveTo(CANVAS_SIZE, CANVAS_SIZE, CANVAS_SIZE - r, CANVAS_SIZE);
-    ctx.lineTo(r, CANVAS_SIZE);
-    ctx.quadraticCurveTo(0, CANVAS_SIZE, 0, CANVAS_SIZE - r);
-    ctx.lineTo(0, r);
-    ctx.quadraticCurveTo(0, 0, r, 0);
-    ctx.closePath();
-    ctx.clip(); 
-
-    if (activeTab === 'ai' && aiImage) {
-      ctx.drawImage(aiImage, 0, 0, CANVAS_SIZE, CANVAS_SIZE);
-    } else {
-      ctx.fillStyle = backgroundColor;
-      ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-
-      ctx.fillStyle = textColor;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = `bold ${iconSize}px ${fontFamily}`;
-      
-      const textYOffset = (fontFamily.includes('Segoe UI Emoji') || fontFamily.includes('Apple Color Emoji')) ? iconSize * 0.1 : 0;
-      ctx.fillText(iconText, CANVAS_SIZE / 2, (CANVAS_SIZE / 2) + textYOffset);
-    }
-
-    ctx.restore(); 
-  };
-
-  const handleDownload = async (format) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    if (format === 'png') {
-      const dataUrl = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.download = `ikona_${Date.now()}.png`;
-      link.href = dataUrl;
-      link.click();
-    } else if (format === 'ico') {
-      try {
-        const blob = await convertToICO(canvas);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.download = `ikona_${Date.now()}.ico`;
-        link.href = url;
-        link.click();
-        URL.revokeObjectURL(url);
-      } catch (e) {
-        alert("Błąd podczas konwersji do ICO.");
-        console.error(e);
-      }
-    }
-  };
-
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
-      <style dangerouslySetInnerHTML={{__html: `
+<!DOCTYPE html>
+<html lang="pl" translate="no" class="notranslate">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kreator Ikon PRO - EduBox AI</title>
+    <!-- Biblioteki -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap');
+        body { background-color: #f8fafc; font-family: 'Montserrat', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
-      `}} />
-      
-      <nav className="bg-white shadow-sm border-b px-6 py-4 flex justify-between items-center sticky top-0 z-50">
-        <div className="flex items-center space-x-3 font-black text-xl tracking-tight">
-          <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-2.5 rounded-xl text-white shadow-lg">
-            <Palette className="w-6 h-6" />
-          </div>
-          <span className="text-slate-800">Icon<span className="text-indigo-600">Generator</span></span>
-        </div>
-        <div className="flex items-center space-x-4">
-          {!isPremium && (
-            <div className="hidden sm:flex items-center space-x-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-              <input value={accessCode} onChange={e => setAccessCode(e.target.value)} placeholder="Kod dostępu..." className="p-2 bg-transparent text-sm w-32 outline-none font-medium text-slate-700"/>
-              <button onClick={handleVerifyCode} className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-colors">
-                <Key className="w-4 h-4" />
-              </button>
-            </div>
-          )}
-          <button onClick={() => window.open(BUY_COFFEE_LINK)} className="flex items-center space-x-2 bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-yellow-900 px-5 py-2.5 rounded-xl font-bold shadow-sm transition-all active:scale-95">
-            <Coffee className="w-5 h-5" /><span>{isPremium ? "Dzięki za Kawę!" : "Postaw Kawę"}</span>
-          </button>
-        </div>
-      </nav>
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        canvas { background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-      <div className="flex flex-col lg:flex-row flex-1 p-6 lg:p-12 gap-12 max-w-7xl mx-auto w-full">
-        <div className="w-full lg:w-1/2 flex flex-col gap-6">
-          <div className="flex gap-2 p-1.5 bg-white rounded-2xl shadow-sm border border-slate-200">
-            <button onClick={() => setActiveTab('text')} className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === 'text' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <Type className="w-4 h-4" /> Tekst / Emoji
-            </button>
-            <button onClick={() => setActiveTab('ai')} className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === 'ai' ? 'bg-purple-50 text-purple-700 shadow-sm border border-purple-100' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <Sparkles className="w-4 h-4" /> Magia AI
-            </button>
-          </div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
 
-          <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-200 flex flex-col gap-6">
-            {activeTab === 'text' && (
-              <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Ikona (Tekst lub Emoji)</label>
-                  <input 
-                    type="text" 
-                    value={iconText} 
-                    onChange={(e) => setIconText(e.target.value)} 
-                    className="w-full text-center text-4xl p-4 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none transition-colors"
-                    maxLength="3"
-                  />
-                </div>
+        const Icon = ({ name, size = 24, className = "" }) => {
+            const icons = {
+                Image: (<><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>),
+                Download: (<><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></>),
+                Coffee: <path d="M18 8h1a4 4 0 0 1 0 8h-1M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8zM7 2v3M11 2v3M15 2v3"/>,
+                Wand2: <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72ZM14 7l3 3M5 6v1M19 2v1M10 2v2M7 10H6M22 9h-2M15 2h1"/>,
+                Type: (<><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></>),
+                Lock: (<><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>),
+                Key: <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3y-3.5L15.5 7.5z"/>,
+                HelpCircle: (<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>)
+            };
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                    {icons[name] || null}
+                </svg>
+            );
+        };
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Kolor Tła</label>
-                    <input 
-                      type="color" 
-                      value={backgroundColor} 
-                      onChange={(e) => setBackgroundColor(e.target.value)} 
-                      className="w-full h-12 rounded-xl cursor-pointer border-0 p-1 bg-slate-50"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Kolor Tekstu</label>
-                    <input 
-                      type="color" 
-                      value={textColor} 
-                      onChange={(e) => setTextColor(e.target.value)} 
-                      className="w-full h-12 rounded-xl cursor-pointer border-0 p-1 bg-slate-50"
-                    />
-                  </div>
-                </div>
+        // --- GUMKA DO TŁA ---
+        const makeWhiteTransparent = (imageSrc) => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                        ctx.drawImage(img, 0, 0);
+                        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                        const data = imageData.data;
+                        
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i], g = data[i+1], b = data[i+2];
+                            if (r > 230 && g > 230 && b > 230) {
+                                data[i+3] = 0; // Pełna przezroczystość
+                            } else if (r > 200 && g > 200 && b > 200) {
+                                data[i+3] = (255 - Math.max(r, g, b)) * 3; // Wygładzanie krawędzi
+                            }
+                        }
+                        ctx.putImageData(imageData, 0, 0);
+                        resolve(canvas.toDataURL('image/png'));
+                    } catch(e) {
+                        resolve(imageSrc); 
+                    }
+                };
+                img.onerror = () => resolve(imageSrc);
+                img.src = imageSrc;
+            });
+        };
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Rodzina Czcionki</label>
-                  <select 
-                    value={fontFamily} 
-                    onChange={(e) => setFontFamily(e.target.value)}
-                    className="w-full p-3 border-2 border-slate-100 rounded-xl outline-none focus:border-indigo-500 font-medium"
-                  >
-                    <option value="'Segoe UI Emoji', 'Apple Color Emoji', sans-serif">Emoji Systemowe</option>
-                    <option value="Arial, sans-serif">Arial</option>
-                    <option value="'Courier New', Courier, monospace">Monospace</option>
-                    <option value="'Times New Roman', Times, serif">Serif</option>
-                    <option value="'Comic Sans MS', cursive">Comic Sans</option>
-                  </select>
-                </div>
-              </div>
-            )}
+        function App() {
+            const canvasRef = useRef(null);
+            
+            const [isPremium, setIsPremium] = useState(false);
+            const [accessCode, setAccessCode] = useState('');
+            const [showInstructions, setShowInstructions] = useState(false);
 
-            {activeTab === 'ai' && (
-              <div className="space-y-6">
-                {!isPremium ? (
-                  <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 text-center space-y-4">
-                    <div className="bg-purple-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto text-purple-600">
-                      <Lock className="w-6 h-6" />
-                    </div>
-                    <h3 className="font-bold text-purple-900 text-lg">Funkcja Premium</h3>
-                    <p className="text-sm text-purple-700">Wprowadź kod Premium na górze strony, aby odblokować Generator AI. Możesz go zdobyć stawiając wirtualną kawę!</p>
+            // Stan Kreatora
+            const [iconMode, setIconMode] = useState('text'); // 'text' lub 'ai'
+            const [iconText, setIconText] = useState('📁');
+            const [bgColor, setBgColor] = useState('#818cf8');
+            const [textColor, setTextColor] = useState('#ffffff');
+            const [cornerRadius, setCornerRadius] = useState(100);
+
+            // Stan AI
+            const [aiPrompt, setAiPrompt] = useState('');
+            const [isGenerating, setIsGenerating] = useState(false);
+            const [aiImageObj, setAiImageObj] = useState(null);
+            const [aiError, setAiError] = useState(null);
+
+            const handleVerifyCode = () => {
+                if (accessCode.toUpperCase() === 'KAWA2024') { setIsPremium(true); setAccessCode(''); } 
+                else { alert('Nieprawidłowy kod!'); }
+            };
+
+            // Rysowanie zaokrąglonego prostokąta
+            const roundRect = (ctx, x, y, width, height, radius) => {
+                ctx.beginPath();
+                ctx.moveTo(x + radius, y);
+                ctx.lineTo(x + width - radius, y);
+                ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+                ctx.lineTo(x + width, y + height - radius);
+                ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                ctx.lineTo(x + radius, y + height);
+                ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+                ctx.lineTo(x, y + radius);
+                ctx.quadraticCurveTo(x, y, x + radius, y);
+                ctx.closePath();
+            };
+
+            // GŁÓWNA FUNKCJA RYSOWANIA NA PŁÓTNIE
+            const drawCanvas = () => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const size = 512;
+                canvas.width = size;
+                canvas.height = size;
+
+                // Czyszczenie tła
+                ctx.clearRect(0, 0, size, size);
+
+                // Rysowanie tła ikony
+                ctx.fillStyle = bgColor;
+                roundRect(ctx, 20, 20, size - 40, size - 40, cornerRadius);
+                ctx.fill();
+
+                // Cień i efekt wypukłości (opcjonalny)
+                ctx.shadowColor = "rgba(0,0,0,0.1)";
+                ctx.shadowBlur = 20;
+                ctx.shadowOffsetY = 10;
+
+                if (iconMode === 'text') {
+                    ctx.fillStyle = textColor;
+                    ctx.font = `bold 220px Montserrat`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    // Emoji wymagają nieco przesunięcia w pionie
+                    ctx.fillText(iconText || '📁', size / 2, size / 2 + 15);
+                } else if (iconMode === 'ai' && aiImageObj) {
+                    // Rysowanie obrazka wyciętego z tła
+                    ctx.drawImage(aiImageObj, 60, 60, size - 120, size - 120);
+                }
+            };
+
+            // Przerysuj, gdy zmieni się stan
+            useEffect(() => {
+                drawCanvas();
+            }, [iconMode, iconText, bgColor, textColor, cornerRadius, aiImageObj]);
+
+            // GENEROWANIE GRAFIKI PRZEZ FAL.AI
+            const handleGenerateAI = async () => {
+                if (!aiPrompt.trim()) return;
+                setIsGenerating(true); setAiError(null);
+                
+                let translatedPrompt = aiPrompt;
+                try {
+                    const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(aiPrompt)}&langpair=pl|en`);
+                    const data = await res.json();
+                    if (data?.responseData?.translatedText && !data.responseData.translatedText.includes("MYMEMORY WARNING")) {
+                        translatedPrompt = data.responseData.translatedText;
+                    }
+                } catch(e) {}
+
+                // Modyfikator dla płaskiej ikony
+                const fullPrompt = `${translatedPrompt}, modern app icon design, single object centered, flat vector style, isolated on pure white background, professional graphic, minimalist`;
+                
+                try {
+                    // Uderzamy do naszego bezpiecznego API w Vercelu
+                    const response = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt: fullPrompt })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error("Błąd podczas łączenia z API w Vercelu. Sprawdź FAL_KEY.");
+                    }
+
+                    const data = await response.json();
                     
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-2 mt-4 sm:hidden">
-                      <input value={accessCode} onChange={e => setAccessCode(e.target.value)} placeholder="Wpisz kod..." className="p-3 border border-purple-200 rounded-xl text-sm w-full outline-none"/>
-                      <button onClick={handleVerifyCode} className="w-full p-3 bg-purple-600 text-white rounded-xl font-bold shadow-md">Odblokuj</button>
+                    // Usuwamy tło z obrazka AI (Magiczna Gumka)
+                    const transparentUrl = await makeWhiteTransparent(data.imageUrl);
+                    
+                    const img = new Image();
+                    img.crossOrigin = "Anonymous";
+                    img.onload = () => {
+                        setAiImageObj(img);
+                        setIsGenerating(false);
+                    };
+                    img.src = transparentUrl;
+
+                } catch (e) { 
+                    setIsGenerating(false);
+                    console.error(e);
+                    setAiError("Błąd: Sprawdź ustawienia klucza API na Vercelu.");
+                }
+            };
+
+            const downloadIcon = () => {
+                const canvas = canvasRef.current;
+                const link = document.createElement('a');
+                link.download = `ikona_edubox_${Date.now()}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Nawigacja Górna */}
+                    <nav className="bg-white border-b px-8 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
+                        <div className="flex items-center space-x-3 font-black text-2xl tracking-tight">
+                            <div className="bg-indigo-500 p-2.5 rounded-xl text-white shadow-lg"><Icon name="Image" size={24}/></div>
+                            <span className="text-gray-800">Kreator<span className="text-indigo-600">Ikon</span> <span className="text-xs text-fuchsia-600 ml-1 font-bold bg-fuchsia-50 px-2 py-1 rounded-md border border-fuchsia-200">PRO AI</span></span>
+                        </div>
+                        <div className="flex items-center space-x-4">
+                            <button onClick={() => setShowInstructions(true)} className="flex items-center space-x-2 text-indigo-600 hover:bg-indigo-50 px-4 py-2 rounded-xl font-bold transition-colors">
+                                <Icon name="HelpCircle" size={20} /> <span className="hidden sm:inline">Jak używać?</span>
+                            </button>
+                            {!isPremium && (
+                                <div className="flex items-center space-x-2 bg-gray-50 p-1.5 rounded-xl border border-gray-200">
+                                    <input value={accessCode} onChange={e => setAccessCode(e.target.value)} placeholder="Kod Premium..." className="p-2 bg-transparent text-sm w-32 outline-none font-medium text-gray-700"/>
+                                    <button onClick={handleVerifyCode} className="p-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg shadow-sm transition-colors"><Icon name="Key" size={16}/></button>
+                                </div>
+                            )}
+                            <button onClick={() => window.open('https://buycoffee.to/magiccolor')} className="flex items-center space-x-2 bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 text-yellow-900 px-5 py-2.5 rounded-xl font-bold shadow-sm transition-all active:scale-95">
+                                <Icon name="Coffee" size={20} /><span>{isPremium ? "Dzięki za Kawę!" : "Postaw Kawę"}</span>
+                            </button>
+                        </div>
+                    </nav>
+
+                    <div className="max-w-6xl mx-auto px-4 py-12 grid grid-cols-1 lg:grid-cols-12 gap-10 w-full flex-grow">
+                        
+                        {/* PANEL BOCZNY */}
+                        <div className="lg:col-span-5 space-y-6 flex flex-col">
+                            
+                            <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 flex gap-1">
+                                <button onClick={() => setIconMode('text')} className={`flex-1 py-3 px-2 rounded-xl font-bold text-sm transition-all flex justify-center items-center gap-2 ${iconMode === 'text' ? 'bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100/50' : 'text-gray-400 hover:bg-gray-50'}`}><Icon name="Type" size={18}/> Tekst / Emoji</button>
+                                <button onClick={() => setIconMode('ai')} className={`flex-1 py-3 px-2 rounded-xl font-bold text-sm transition-all flex justify-center items-center gap-2 ${iconMode === 'ai' ? 'bg-purple-50 text-purple-700 shadow-sm border border-purple-100/50' : 'text-gray-400 hover:bg-gray-50'}`}><Icon name="Wand2" size={18}/> Grafika AI</button>
+                            </div>
+
+                            {/* Tryb TEKST */}
+                            {iconMode === 'text' && (
+                                <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-4">
+                                    <label className="font-bold text-gray-700 text-sm uppercase tracking-wider block">Co ma być na ikonie?</label>
+                                    <input type="text" value={iconText} onChange={e => setIconText(e.target.value)} placeholder="Wpisz np. 'M', 'Matematyka' lub '🍎'" maxLength="20" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:border-indigo-400 text-lg font-bold text-center" />
+                                </div>
+                            )}
+
+                            {/* Tryb AI */}
+                            {iconMode === 'ai' && (
+                                <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-3xl shadow-sm border border-purple-100 space-y-4">
+                                    <h2 className="font-bold text-purple-900 text-sm uppercase tracking-widest flex items-center"><Icon name="Wand2" size={18} className="mr-2 text-purple-500"/> Własna Grafika AI</h2>
+                                    
+                                    {!isPremium ? (
+                                        <div className="text-center space-y-3 py-4">
+                                            <div className="mx-auto w-12 h-12 bg-white rounded-full flex items-center justify-center text-purple-400 mb-2 shadow-sm"><Icon name="Lock" size={24} /></div>
+                                            <p className="text-sm text-purple-700 font-medium">Funkcja dostępna z Kodem Premium (Postaw Kawę).</p>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="np. Otwarta książka, wesoła sowa, matematyczne cyfry..." className="w-full p-4 border border-purple-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-purple-100 bg-white resize-none" rows="2" />
+                                            <button onClick={handleGenerateAI} disabled={isGenerating} className="w-full bg-purple-600 text-white px-4 py-4 rounded-xl font-bold shadow-md hover:bg-purple-700 disabled:bg-gray-400 transition-colors flex items-center justify-center space-x-2">
+                                                {isGenerating ? <span>⏳ Rysowanie...</span> : <><Icon name="Wand2" size={18}/><span>Wygeneruj Grafikę</span></>}
+                                            </button>
+                                            {aiError && <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs text-center">{aiError}</div>}
+                                            <p className="text-[10px] text-purple-500 text-center">Magiczna Gumka automatycznie usunie tło, aby obrazek idealnie pasował do ikony!</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Ustawienia Wyglądu */}
+                            <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-6">
+                                <h2 className="font-bold text-gray-800 text-sm uppercase tracking-widest border-b pb-2">Wygląd Ikony</h2>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Kolor Tła</label>
+                                        <input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full h-12 rounded-xl cursor-pointer bg-gray-50 p-1 border border-gray-200" />
+                                    </div>
+                                    <div className={iconMode === 'ai' ? 'opacity-30 pointer-events-none' : ''}>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Kolor Tekstu</label>
+                                        <input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} className="w-full h-12 rounded-xl cursor-pointer bg-gray-50 p-1 border border-gray-200" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between text-[10px] font-bold text-gray-400 mb-2 uppercase"><span>Zaokrąglenie rogów</span></div>
+                                    <input type="range" min="0" max="256" value={cornerRadius} onChange={e => setCornerRadius(Number(e.target.value))} className="w-full accent-indigo-600 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* PANEL PODGLĄDU I POBIERANIA */}
+                        <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-8 bg-gray-50 rounded-[3rem] border-4 border-dashed border-gray-200 p-10 relative">
+                            
+                            {/* Podgląd Canvas */}
+                            <div className="relative shadow-2xl rounded-3xl overflow-hidden bg-white">
+                                <canvas ref={canvasRef} className="w-64 h-64 md:w-80 md:h-80 block"></canvas>
+                            </div>
+
+                            <button onClick={downloadIcon} className="bg-gray-900 hover:bg-gray-800 text-white px-10 py-5 rounded-2xl font-black text-lg tracking-widest flex items-center justify-center space-x-3 shadow-xl transition-all active:scale-95 w-full max-w-sm">
+                                <Icon name="Download" size={24} /><span>POBIERZ (.PNG)</span>
+                            </button>
+                            <p className="text-gray-400 text-xs font-semibold text-center max-w-md">Pobrany plik .PNG to dziś uniwersalny standard ikon. Świetnie sprawdzi się na systemach Windows i w aplikacjach webowych.</p>
+                        </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <label className="block text-xs font-bold text-purple-600 uppercase tracking-widest mb-2">Opisz swoją ikonę</label>
-                    <textarea 
-                      value={aiPrompt} 
-                      onChange={e => setAiPrompt(e.target.value)} 
-                      placeholder="np. Słodki czerwony lisek, minimalistyczna ikona..."
-                      className="w-full p-4 border-2 border-purple-100 rounded-2xl focus:border-purple-500 outline-none resize-none h-24 text-sm"
-                    />
-                    <button 
-                      onClick={handleGenerateAI} 
-                      disabled={isGenerating}
-                      className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-200 hover:scale-[0.98] transition-all disabled:opacity-50 disabled:hover:scale-100"
-                    >
-                      {isGenerating ? 'Generowanie magii...' : <><Sparkles className="w-5 h-5" /> Stwórz Ikonę AI</>}
-                    </button>
-                    {errorMsg && <p className="text-red-500 text-xs font-bold text-center mt-2">{errorMsg}</p>}
-                    <p className="text-[10px] text-slate-400 text-center">Wskazówka: AI automatycznie generuje ikony bez tła (wypełnia kształt na całej powierzchni płótna).</p>
-                  </div>
-                )}
-              </div>
-            )}
 
-            <hr className="border-slate-100"/>
-
-            <div className="space-y-6">
-              <div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Zaokrąglenie rogów</span>
-                  <span className="text-xs font-bold text-indigo-600">{Math.round((borderRadius / (CANVAS_SIZE/2)) * 100)}%</span>
+                    {/* MODAL Z INSTRUKCJĄ */}
+                    {showInstructions && (
+                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                            <div className="bg-white w-full max-w-2xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col font-sans">
+                                <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-slate-50">
+                                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2"><Icon name="HelpCircle" className="text-indigo-600"/> Instrukcja: Kreator Ikon</h2>
+                                    <button onClick={() => setShowInstructions(false)} className="p-2 hover:bg-slate-200 rounded-xl transition-colors font-bold text-lg">✕</button>
+                                </div>
+                                <div className="p-6 overflow-y-auto space-y-4 text-sm text-gray-600">
+                                    <p><strong>Czym jest ta aplikacja?</strong> Pozwala na stworzenie pięknych ikon folderów lub przedmiotów szkolnych z poziomu przeglądarki.</p>
+                                    <ul className="list-disc pl-5 space-y-2">
+                                        <li><strong>Tryb Tekst/Emoji:</strong> Wpisz pierwszą literę przedmiotu (np. "M" jak Matematyka) lub wklej ikonkę Emoji ze swojej klawiatury.</li>
+                                        <li><strong>Tryb Grafika AI:</strong> Wpisz słowami, co chcesz mieć na ikonie (np. Globus). System połączy się z naszym szybkim serwerem, narysuje to, <strong>automatycznie wytnie tło</strong> za pomocą Magicznej Gumki i wklei w sam środek Twojej ikony! (Opcja Premium).</li>
+                                        <li><strong>Kształt:</strong> Zmień zaokrąglenie suwakiem na dole. Przesuwając go do końca w lewo otrzymasz kwadrat, a w prawo - idealne koło!</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max={CANVAS_SIZE / 2} 
-                  value={borderRadius} 
-                  onChange={(e) => setBorderRadius(Number(e.target.value))} 
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                />
-              </div>
-              
-              {activeTab === 'text' && (
-                <div>
-                  <div className="flex justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Wielkość elementu</span>
-                    <span className="text-xs font-bold text-indigo-600">{iconSize}px</span>
-                  </div>
-                  <input 
-                    type="range" 
-                    min="48" 
-                    max="400" 
-                    value={iconSize} 
-                    onChange={(e) => setIconSize(Number(e.target.value))} 
-                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+            );
+        }
 
-        <div className="w-full lg:w-1/2 flex flex-col items-center justify-center p-8 bg-white rounded-3xl shadow-sm border border-slate-200 min-h-[500px]">
-          <div className="mb-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-center">Podgląd Ikony</div>
-          
-          <div className="relative mb-12 group z-10 w-64 h-64 rounded-3xl shadow-2xl transition-transform duration-300 group-hover:scale-[1.02]" 
-            style={{
-              backgroundImage: 'repeating-linear-gradient(45deg, #f1f5f9 25%, transparent 25%, transparent 75%, #f1f5f9 75%, #f1f5f9), repeating-linear-gradient(45deg, #f1f5f9 25%, #ffffff 25%, #ffffff 75%, #f1f5f9 75%, #f1f5f9)',
-              backgroundPosition: '0 0, 10px 10px',
-              backgroundSize: '20px 20px'
-            }}>
-            <canvas 
-              ref={canvasRef} 
-              width={CANVAS_SIZE} 
-              height={CANVAS_SIZE} 
-              className="w-full h-full bg-transparent drop-shadow-lg"
-            ></canvas>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
-            <button onClick={() => handleDownload('png')} className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-6 py-4 rounded-xl font-bold shadow-lg transition-all hover:-translate-y-1">
-              <Download className="w-5 h-5" /> Pobierz PNG
-            </button>
-            <button onClick={() => handleDownload('ico')} className="flex-1 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-4 rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all hover:-translate-y-1 relative overflow-hidden">
-              <div className="absolute top-0 right-0 bg-yellow-400 text-yellow-900 text-[8px] font-black px-2 py-0.5 rounded-bl-lg uppercase">Windows</div>
-              <Download className="w-5 h-5" /> Pobierz ICO
-            </button>
-          </div>
-          
-          <p className="text-[10px] text-slate-400 text-center mt-6 max-w-xs">
-            Pliki <strong>.ICO</strong> są idealne do tworzenia własnych ikon folderów na systemie Windows.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
