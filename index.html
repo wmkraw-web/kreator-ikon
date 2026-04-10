@@ -17,6 +17,11 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         canvas { background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 20px 20px; }
         .btn-ico { background: linear-gradient(135deg, #0f172a 0%, #334155 100%); }
+        
+        /* Styl dla przełącznika (Toggle) */
+        .dot { transition: all 0.3s ease-in-out; }
+        input:checked ~ .dot { transform: translateX(100%); background-color: #7c3aed; }
+        input:checked ~ .block { background-color: #ddd6fe; }
     </style>
 </head>
 <body>
@@ -35,7 +40,8 @@
                 Lock: (<><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>),
                 Key: <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3y-3.5L15.5 7.5z"/>,
                 HelpCircle: (<><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></>),
-                Windows: (<><path d="M3 12L3 4.5L10.5 3.5L10.5 12L3 12Z"/><path d="M11.5 3.5L21 2L21 12L11.5 12L11.5 3.5Z"/><path d="M3 13L10.5 13L10.5 20.5L3 19.5L3 13Z"/><path d="M11.5 13L21 13L21 22L11.5 20.5L11.5 13Z"/></>)
+                Windows: (<><path d="M3 12L3 4.5L10.5 3.5L10.5 12L3 12Z"/><path d="M11.5 3.5L21 2L21 12L11.5 12L11.5 3.5Z"/><path d="M3 13L10.5 13L10.5 20.5L3 19.5L3 13Z"/><path d="M11.5 13L21 13L21 22L11.5 20.5L11.5 13Z"/></>),
+                Eraser: <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7Z"/>
             };
             return (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -44,7 +50,6 @@
             );
         };
 
-        // --- KONWERTER PNG DO ICO (Binary) ---
         const convertCanvasToIco = (canvas) => {
             return new Promise((resolve) => {
                 canvas.toBlob((blob) => {
@@ -53,30 +58,12 @@
                         const pngData = new Uint8Array(reader.result);
                         const icoHeader = new Uint8Array([0, 0, 1, 0, 1, 0]);
                         const icoDir = new Uint8Array(16);
-                        
-                        // ICO Directory: width, height, colors, reserved, planes, bpp, size, offset
                         icoDir[0] = canvas.width >= 256 ? 0 : canvas.width;
                         icoDir[1] = canvas.height >= 256 ? 0 : canvas.height;
-                        icoDir[2] = 0; // No color palette
-                        icoDir[3] = 0; // Reserved
-                        icoDir[4] = 1; // Planes
-                        icoDir[5] = 0;
-                        icoDir[6] = 32; // Bits per pixel
-                        icoDir[7] = 0;
-                        
-                        // Size of PNG data (4 bytes, little-endian)
+                        icoDir[2] = 0; icoDir[3] = 0; icoDir[4] = 1; icoDir[5] = 0; icoDir[6] = 32; icoDir[7] = 0;
                         const size = pngData.length;
-                        icoDir[8] = size & 0xFF;
-                        icoDir[9] = (size >> 8) & 0xFF;
-                        icoDir[10] = (size >> 16) & 0xFF;
-                        icoDir[11] = (size >> 24) & 0xFF;
-                        
-                        // Offset (Header + 1 Directory = 6 + 16 = 22 bytes)
-                        icoDir[12] = 22;
-                        icoDir[13] = 0;
-                        icoDir[14] = 0;
-                        icoDir[15] = 0;
-                        
+                        icoDir[8] = size & 0xFF; icoDir[9] = (size >> 8) & 0xFF; icoDir[10] = (size >> 16) & 0xFF; icoDir[11] = (size >> 24) & 0xFF;
+                        icoDir[12] = 22; icoDir[13] = 0; icoDir[14] = 0; icoDir[15] = 0;
                         const icoFile = new Blob([icoHeader, icoDir, pngData], {type: "image/x-icon"});
                         resolve(URL.createObjectURL(icoFile));
                     };
@@ -92,16 +79,15 @@
                 img.onload = () => {
                     try {
                         const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
+                        canvas.width = img.width; canvas.height = img.height;
                         const ctx = canvas.getContext('2d', { willReadFrequently: true });
                         ctx.drawImage(img, 0, 0);
                         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
                         const data = imageData.data;
                         for (let i = 0; i < data.length; i += 4) {
                             const r = data[i], g = data[i+1], b = data[i+2];
-                            if (r > 230 && g > 230 && b > 230) { data[i+3] = 0; } 
-                            else if (r > 200 && g > 200 && b > 200) { data[i+3] = (255 - Math.max(r, g, b)) * 3; }
+                            if (r > 235 && g > 235 && b > 235) { data[i+3] = 0; } 
+                            else if (r > 210 && g > 210 && b > 210) { data[i+3] = (255 - Math.max(r, g, b)) * 2; }
                         }
                         ctx.putImageData(imageData, 0, 0);
                         resolve(canvas.toDataURL('image/png'));
@@ -121,11 +107,14 @@
             const [iconText, setIconText] = useState('📁');
             const [bgColor, setBgColor] = useState('#818cf8');
             const [textColor, setTextColor] = useState('#ffffff');
-            const [cornerRadius, setCornerRadius] = useState(100);
+            const [cornerRadius, setCornerRadius] = useState(128);
             const [aiPrompt, setAiPrompt] = useState('');
             const [isGenerating, setIsGenerating] = useState(false);
             const [aiImageObj, setAiImageObj] = useState(null);
             const [aiError, setAiError] = useState(null);
+            
+            // NOWOŚĆ: Stan wyboru usuwania tła
+            const [removeAiBg, setRemoveAiBg] = useState(true);
 
             const handleVerifyCode = () => {
                 if (accessCode.toUpperCase() === 'KAWA2024') { setIsPremium(true); setAccessCode(''); } 
@@ -148,15 +137,19 @@
                 const size = 512;
                 canvas.width = size; canvas.height = size;
                 ctx.clearRect(0, 0, size, size);
+                
+                // Rysowanie tła (zaokrąglony kwadrat)
                 ctx.fillStyle = bgColor;
                 roundRect(ctx, 20, 20, size - 40, size - 40, cornerRadius);
                 ctx.fill();
+
                 if (iconMode === 'text') {
                     ctx.fillStyle = textColor; ctx.font = `bold 220px Montserrat`;
                     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                     ctx.fillText(iconText || '📁', size / 2, size / 2 + 15);
                 } else if (iconMode === 'ai' && aiImageObj) {
-                    ctx.drawImage(aiImageObj, 60, 60, size - 120, size - 120);
+                    // POWIĘKSZONA GRAFIKA (mniejsze marginesy: 35 zamiast 60)
+                    ctx.drawImage(aiImageObj, 35, 35, size - 70, size - 70);
                 }
             };
 
@@ -171,16 +164,24 @@
                     const data = await res.json();
                     if (data?.responseData?.translatedText && !data.responseData.translatedText.includes("MYMEMORY WARNING")) { translatedPrompt = data.responseData.translatedText; }
                 } catch(e) {}
+                
                 const fullPrompt = `${translatedPrompt}, modern app icon design, single object centered, flat vector style, isolated on pure white background, professional graphic, minimalist`;
+                
                 try {
                     const response = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: fullPrompt }) });
-                    if (!response.ok) throw new Error("Błąd API Vercel.");
+                    if (!response.ok) throw new Error("Błąd API.");
                     const data = await response.json();
-                    const transparentUrl = await makeWhiteTransparent(data.imageUrl);
+                    
+                    // DECYZJA O USUWANIU TŁA
+                    let finalImageUrl = data.imageUrl;
+                    if (removeAiBg) {
+                        finalImageUrl = await makeWhiteTransparent(data.imageUrl);
+                    }
+
                     const img = new Image(); img.crossOrigin = "Anonymous";
                     img.onload = () => { setAiImageObj(img); setIsGenerating(false); };
-                    img.src = transparentUrl;
-                } catch (e) { setIsGenerating(false); setAiError("Błąd serwera AI."); }
+                    img.src = finalImageUrl;
+                } catch (e) { setIsGenerating(false); setAiError("Błąd serwerów AI. Spróbuj ponownie za moment."); }
             };
 
             const downloadFile = async (type) => {
@@ -188,11 +189,9 @@
                 const link = document.createElement('a');
                 if (type === 'ico') {
                     const icoUrl = await convertCanvasToIco(canvas);
-                    link.href = icoUrl;
-                    link.download = `ikona_${Date.now()}.ico`;
+                    link.href = icoUrl; link.download = `ikona_${Date.now()}.ico`;
                 } else {
-                    link.href = canvas.toDataURL('image/png');
-                    link.download = `ikona_${Date.now()}.png`;
+                    link.href = canvas.toDataURL('image/png'); link.download = `ikona_${Date.now()}.png`;
                 }
                 link.click();
             };
@@ -202,7 +201,7 @@
                     <nav className="bg-white border-b px-8 py-4 flex justify-between items-center sticky top-0 z-50 shadow-sm">
                         <div className="flex items-center space-x-3 font-black text-2xl tracking-tight">
                             <div className="bg-indigo-500 p-2.5 rounded-xl text-white shadow-lg"><Icon name="Image" size={24}/></div>
-                            <span className="text-gray-800 text-xl md:text-2xl">Kreator<span className="text-indigo-600">Ikon</span> <span className="text-[10px] text-fuchsia-600 ml-1 font-bold bg-fuchsia-50 px-2 py-1 rounded-md border border-fuchsia-200">v2.0 (ICO Support)</span></span>
+                            <span className="text-gray-800 text-xl md:text-2xl">Kreator<span className="text-indigo-600">Ikon</span> <span className="text-[10px] text-fuchsia-600 ml-1 font-bold bg-fuchsia-50 px-2 py-1 rounded-md border border-fuchsia-200">PRO v2.5</span></span>
                         </div>
                         <div className="flex items-center space-x-2 md:space-x-4">
                             <button onClick={() => setShowInstructions(true)} className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-xl transition-colors"><Icon name="HelpCircle" size={24} /></button>
@@ -219,48 +218,66 @@
                     <div className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8 w-full flex-grow">
                         <div className="lg:col-span-5 space-y-6 flex flex-col">
                             <div className="bg-white p-1.5 rounded-2xl shadow-sm border border-gray-100 flex gap-1">
-                                <button onClick={() => setIconMode('text')} className={`flex-1 py-3 rounded-xl font-bold text-sm flex justify-center items-center gap-2 ${iconMode === 'text' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-400'}`}><Icon name="Type" size={18}/> Tekst</button>
-                                <button onClick={() => setIconMode('ai')} className={`flex-1 py-3 rounded-xl font-bold text-sm flex justify-center items-center gap-2 ${iconMode === 'ai' ? 'bg-purple-50 text-purple-700' : 'text-gray-400'}`}><Icon name="Wand2" size={18}/> AI</button>
+                                <button onClick={() => setIconMode('text')} className={`flex-1 py-3 rounded-xl font-bold text-sm flex justify-center items-center gap-2 transition-all ${iconMode === 'text' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-400 hover:text-gray-600'}`}><Icon name="Type" size={18}/> Tekst</button>
+                                <button onClick={() => setIconMode('ai')} className={`flex-1 py-3 rounded-xl font-bold text-sm flex justify-center items-center gap-2 transition-all ${iconMode === 'ai' ? 'bg-purple-50 text-purple-700' : 'text-gray-400 hover:text-gray-600'}`}><Icon name="Wand2" size={18}/> Magia AI</button>
                             </div>
 
                             {iconMode === 'text' ? (
                                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-4">
-                                    <label className="font-bold text-gray-700 text-sm uppercase">Znak / Litera / Emoji</label>
-                                    <input type="text" value={iconText} onChange={e => setIconText(e.target.value)} maxLength="2" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-4xl font-bold outline-none" />
+                                    <label className="font-bold text-gray-700 text-[10px] uppercase tracking-widest">Znak / Litera / Emoji</label>
+                                    <input type="text" value={iconText} onChange={e => setIconText(e.target.value)} maxLength="2" className="w-full p-4 bg-gray-50 border border-gray-200 rounded-xl text-center text-4xl font-bold outline-none focus:border-indigo-400 transition-colors" />
                                 </div>
                             ) : (
-                                <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-3xl shadow-sm border border-purple-100 space-y-4">
-                                    <h2 className="font-bold text-purple-900 text-sm uppercase flex items-center"><Icon name="Wand2" size={18} className="mr-2"/> Grafika AI</h2>
-                                    {!isPremium ? <div className="text-center p-4"><p className="text-sm text-purple-700 font-medium">Wymaga Kodu Premium</p></div> : (
+                                <div className="bg-gradient-to-br from-purple-50 to-white p-6 rounded-3xl shadow-sm border border-purple-100 space-y-5">
+                                    <h2 className="font-bold text-purple-900 text-sm uppercase flex items-center"><Icon name="Wand2" size={18} className="mr-2"/> Generator Obrazków</h2>
+                                    {!isPremium ? <div className="text-center p-4 bg-white/50 rounded-2xl border border-purple-100"><p className="text-sm text-purple-700 font-medium">Funkcja AI wymaga Kodu Premium</p></div> : (
                                         <div className="space-y-4">
-                                            <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="np. Sowa, globus, książka..." className="w-full p-4 border border-purple-200 rounded-xl text-sm outline-none resize-none" rows="2" />
-                                            <button onClick={handleGenerateAI} disabled={isGenerating} className="w-full bg-purple-600 text-white py-3 rounded-xl font-bold shadow-md flex items-center justify-center gap-2">{isGenerating ? "⏳ Rysuję..." : "Wygeneruj"}</button>
-                                            {aiError && <div className="text-red-700 text-xs text-center">{aiError}</div>}
+                                            <textarea value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} placeholder="Co narysować? np. Uśmiechnięty plecak..." className="w-full p-4 border border-purple-200 rounded-xl text-sm outline-none resize-none focus:ring-2 focus:ring-purple-100" rows="2" />
+                                            
+                                            {/* PRZEŁĄCZNIK USUWANIA TŁA */}
+                                            <div className="flex items-center justify-between bg-white/60 p-3 rounded-xl border border-purple-100">
+                                                <div className="flex items-center gap-2">
+                                                    <Icon name="Eraser" size={16} className="text-purple-600"/>
+                                                    <span className="text-xs font-bold text-purple-900 uppercase tracking-tighter">Magiczna Gumka (Usuń tło)</span>
+                                                </div>
+                                                <label className="flex items-center cursor-pointer">
+                                                    <div className="relative">
+                                                        <input type="checkbox" className="sr-only" checked={removeAiBg} onChange={() => setRemoveAiBg(!removeAiBg)} />
+                                                        <div className="block bg-gray-200 w-10 h-6 rounded-full"></div>
+                                                        <div className="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition shadow-sm"></div>
+                                                    </div>
+                                                </label>
+                                            </div>
+
+                                            <button onClick={handleGenerateAI} disabled={isGenerating} className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3.5 rounded-xl font-black text-sm uppercase tracking-widest shadow-lg shadow-purple-200 flex items-center justify-center gap-2 active:scale-95 transition-all">
+                                                {isGenerating ? "⏳ SZKICUJĘ..." : "WYGENERUJ IKONĘ"}
+                                            </button>
+                                            {aiError && <div className="text-red-700 text-[10px] font-bold text-center bg-red-50 p-2 rounded-lg">{aiError}</div>}
                                         </div>
                                     )}
                                 </div>
                             )}
 
                             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-4">
-                                <h2 className="font-bold text-gray-800 text-sm uppercase border-b pb-2">Wygląd</h2>
+                                <h2 className="font-bold text-gray-800 text-[10px] uppercase tracking-widest border-b pb-2">Parametry wizualne</h2>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">TŁO</label><input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full h-10 rounded-lg cursor-pointer" /></div>
-                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">TEKST</label><input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} className="w-full h-10 rounded-lg cursor-pointer" /></div>
+                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">KOLOR TŁA</label><input type="color" value={bgColor} onChange={e => setBgColor(e.target.value)} className="w-full h-10 rounded-lg cursor-pointer border-none p-0" /></div>
+                                    <div><label className="text-[10px] font-bold text-gray-400 block mb-1">KOLOR ZNAKU</label><input type="color" value={textColor} onChange={e => setTextColor(e.target.value)} className="w-full h-10 rounded-lg cursor-pointer border-none p-0" /></div>
                                 </div>
-                                <div><label className="text-[10px] font-bold text-gray-400 block mb-1 uppercase">Kształt</label><input type="range" min="0" max="256" value={cornerRadius} onChange={e => setCornerRadius(Number(e.target.value))} className="w-full accent-indigo-600 h-2 bg-gray-200 rounded-lg" /></div>
+                                <div><label className="text-[10px] font-bold text-gray-400 block mb-1 uppercase tracking-widest">Zaokrąglenie Rogów</label><input type="range" min="0" max="256" value={cornerRadius} onChange={e => setCornerRadius(Number(e.target.value))} className="w-full accent-indigo-600 h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer" /></div>
                             </div>
                         </div>
 
                         <div className="lg:col-span-7 flex flex-col items-center justify-center space-y-6 bg-slate-50/50 rounded-[3rem] border-4 border-dashed border-slate-200 p-8">
-                            <div className="relative shadow-2xl rounded-[100px] overflow-hidden bg-white p-4">
-                                <canvas ref={canvasRef} className="w-56 h-56 md:w-80 md:h-80 block rounded-[inherit]"></canvas>
+                            <div className="relative shadow-2xl rounded-[120px] overflow-hidden bg-white p-6 border-8 border-white group transition-transform duration-500 hover:scale-[1.02]">
+                                <canvas ref={canvasRef} className="w-64 h-64 md:w-80 md:h-80 block rounded-[inherit]"></canvas>
                             </div>
 
                             <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
                                 <button onClick={() => downloadFile('png')} className="flex-1 bg-white text-slate-800 border border-slate-200 py-4 rounded-2xl font-black text-sm tracking-widest flex items-center justify-center gap-2 shadow-sm hover:bg-slate-50 active:scale-95 transition-all"><Icon name="Download" size={20} /><span>PNG</span></button>
-                                <button onClick={() => downloadFile('ico')} className="flex-1 btn-ico text-white py-4 rounded-2xl font-black text-sm tracking-widest flex items-center justify-center gap-2 shadow-xl hover:opacity-90 active:scale-95 transition-all"><Icon name="Windows" size={20} /><span>WINDOWS .ICO</span></button>
+                                <button onClick={() => downloadFile('ico')} className="flex-1 btn-ico text-white py-4 rounded-2xl font-black text-sm tracking-widest flex items-center justify-center gap-2 shadow-xl hover:opacity-90 active:scale-95 transition-all"><Icon name="Windows" size={20} /><span>SYSTEM .ICO</span></button>
                             </div>
-                            <p className="text-slate-400 text-[10px] font-bold uppercase text-center">Wybierz format .ICO, aby zmienić ikonę folderu w systemie Windows!</p>
+                            <p className="text-slate-400 text-[10px] font-bold uppercase text-center tracking-widest opacity-60">Idealne dla Windows 10/11 i macOS</p>
                         </div>
                     </div>
 
@@ -268,15 +285,15 @@
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
                             <div className="bg-white w-full max-w-xl rounded-3xl shadow-2xl p-8 space-y-4">
                                 <div className="flex justify-between items-center"><h2 className="text-xl font-black">Instrukcja obsługi</h2><button onClick={() => setShowInstructions(false)} className="font-bold text-xl">✕</button></div>
-                                <div className="text-sm text-slate-600 space-y-4">
-                                    <p><strong>Jak zmienić ikonę folderu w Windows?</strong></p>
+                                <div className="text-sm text-slate-600 space-y-4 leading-relaxed">
+                                    <p><strong>Jak zmienić ikonę folderu?</strong></p>
                                     <ol className="list-decimal pl-5 space-y-2">
-                                        <li>Pobierz ikonę przyciskiem <strong>WINDOWS .ICO</strong>.</li>
+                                        <li>Pobierz ikonę przyciskiem <strong>SYSTEM .ICO</strong>.</li>
                                         <li>Kliknij Prawym Przyciskiem na wybrany folder na swoim komputerze.</li>
                                         <li>Wybierz <strong>Właściwości</strong> -> <strong>Dostosowywanie</strong> -> <strong>Zmień ikonę...</strong></li>
-                                        <li>Kliknij <strong>Przeglądaj...</strong> i wybierz pobrany od nas plik .ico.</li>
+                                        <li>Kliknij <strong>Przeglądaj...</strong> i wybierz pobrany plik .ico.</li>
                                     </ol>
-                                    <p className="bg-indigo-50 p-3 rounded-lg text-indigo-800 font-medium italic">Nasza Magiczna Gumka AI automatycznie wycina tło, więc Twoje ikony będą wyglądać profesjonalnie na każdym kolorze pulpitu!</p>
+                                    <p className="bg-purple-50 p-4 rounded-xl text-purple-900 font-bold italic">PRO TIP: Jeśli wyłączysz "Magiczną Gumkę", AI zostawi tło obrazka. Jest to świetne do tworzenia "pełnych" ikon aplikacji!</p>
                                 </div>
                             </div>
                         </div>
